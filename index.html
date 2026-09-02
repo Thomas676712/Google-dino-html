@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Dino Runner</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            text-align: center;
+        }
+
+        canvas {
+            background-color: #fff;
+            border-bottom: 2px solid #535353;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: block;
+            max-width: 100%;
+        }
+
+        .instructions {
+            margin-top: 15px;
+            color: #757575;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="250"></canvas>
+    <div class="instructions">Press SPACEBAR or TAP to Jump</div>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Game configurations
+    let gameSpeed = 5;
+    const gravity = 0.6;
+    let score = 0;
+    let highScore = localStorage.getItem("dino_highscore") || 0;
+    let isGameOver = false;
+    let gameStarted = false;
+    let obstacles = [];
+    let frameCount = 0;
+
+    // Dinosaur Object
+    const dino = {
+        x: 50,
+        y: 200,
+        width: 40,
+        height: 44,
+        velocityY: 0,
+        isJumping: false,
+        
+        draw() {
+            ctx.fillStyle = "#535353";
+            // Simple geometric dino representation
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            // Eye
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(this.x + 28, this.y + 6, 4, 4);
+            // Snout/Mouth accent
+            ctx.fillStyle = "#535353";
+            ctx.fillRect(this.x + 20, this.y + 20, 20, 6);
+        },
+        
+        jump() {
+            if (!this.isJumping && !isGameOver) {
+                this.velocityY = -12;
+                this.isJumping = true;
+            }
+        },
+        
+        update() {
+            this.y += this.velocityY;
+            this.velocityY += gravity;
+            
+            // Floor boundary
+            const floorY = canvas.height - this.height - 10;
+            if (this.y >= floorY) {
+                this.y = floorY;
+                this.velocityY = 0;
+                this.isJumping = false;
+            }
+        }
+    };
+
+    // Obstacle (Cactus) Template
+    class Obstacle {
+        constructor() {
+            this.width = Math.random() * (30 - 15) + 15;
+            this.height = Math.random() * (50 - 30) + 30;
+            this.x = canvas.width;
+            this.y = canvas.height - this.height - 10;
+        }
+
+        draw() {
+            ctx.fillStyle = "#535353";
+            // Draw core trunk
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            // Draw retro branches if wide enough
+            if (this.width > 20) {
+                ctx.fillRect(this.x - 4, this.y + 10, 4, 15);
+                ctx.fillRect(this.x + this.width, this.y + 14, 4, 12);
+            }
+        }
+
+        update() {
+            this.x -= gameSpeed;
+        }
+    }
+
+    // Input Handling
+    function handleAction() {
+        if (!gameStarted) {
+            resetGame();
+            gameStarted = true;
+            animate();
+        } else if (isGameOver) {
+            resetGame();
+        } else {
+            dino.jump();
+        }
+    }
+
+    window.addEventListener("keydown", (e) => {
+        if (e.code === "Space" || e.code === "ArrowUp") {
+            e.preventDefault();
+            handleAction();
+        }
+    });
+
+    canvas.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleAction();
+    });
+
+    // Reset loop variables
+    function resetGame() {
+        isGameOver = false;
+        score = 0;
+        gameSpeed = 5;
+        obstacles = [];
+        frameCount = 0;
+        dino.y = canvas.height - dino.height - 10;
+        dino.velocityY = 0;
+        dino.isJumping = false;
+    }
+
+    // Spawning frequency logic
+    function spawnObstacles() {
+        frameCount++;
+        let spawnInterval = Math.max(50, 120 - Math.floor(gameSpeed * 2));
+        
+        if (frameCount % spawnInterval === 0) {
+            obstacles.push(new Obstacle());
+        }
+    }
+
+    // Check collision bounding boxes
+    function checkCollision(rect1, rect2) {
+        return rect1.x < rect2.x + rect2.width &&
+               rect1.x + rect1.width > rect2.x &&
+               rect1.y < rect2.y + rect2.height &&
+               rect1.y + rect1.height > rect2.y;
+    }
+
+    // Display Text Elements
+    function drawUI() {
+        ctx.fillStyle = "#535353";
+        ctx.font = "16px 'Courier New'";
+        
+        // Pad numbers to 5 digits like the original game
+        let scoreStr = String(Math.floor(score)).padStart(5, '0');
+        let highScoreStr = String(Math.floor(highScore)).padStart(5, '0');
+        
+        ctx.fillText(`HI ${highScoreStr}  ${scoreStr}`, canvas.width - 160, 30);
+
+        if (isGameOver) {
+            ctx.font = "bold 24px 'Courier New'";
+            ctx.fillText("G A M E  O V E R", canvas.width / 2 - 110, canvas.height / 2 - 10);
+            ctx.font = "14px 'Courier New'";
+            ctx.fillText("Press Space to Restart", canvas.width / 2 - 90, canvas.height / 2 + 20);
+        }
+        
+        if (!gameStarted) {
+            ctx.font = "20px 'Courier New'";
+            ctx.fillText("Press SPACEBAR to Start Running", canvas.width / 2 - 180, canvas.height / 2);
+        }
+    }
+
+    // Core Game Loop
+    function animate() {
+        if (isGameOver) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw ground line mesh details
+        ctx.strokeStyle = "#e0e0e0";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height - 10);
+        ctx.lineTo(canvas.width, canvas.height - 10);
+        ctx.stroke();
+
+        // Update & Draw Entity Logic
+        dino.update();
+        dino.draw();
+
+        spawnObstacles();
+
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            obstacles[i].update();
+            obstacles[i].draw();
+
+            // Collision check
+            if (checkCollision(dino, obstacles[i])) {
+                isGameOver = true;
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem("dino_highscore", highScore);
+                }
+            }
+
+            // Cleanup off-screen obstacles
+            if (obstacles[i].x + obstacles[i].width < 0) {
+                obstacles.splice(i, 1);
+            }
+        }
+
+        // Progression modifiers
+        score += 0.15;
+        gameSpeed += 0.002;
+
+        drawUI();
+
+        if (!isGameOver) {
+            requestAnimationFrame(animate);
+        }
+    }
+
+    // Initial Splash Screen Render
+    drawUI();
+</script>
+
+</body>
+</html>
